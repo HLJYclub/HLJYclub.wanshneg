@@ -236,7 +236,6 @@
             <h1 class="text-3xl md:text-4xl font-bold text-white flex items-center">
                 <i class="fa fa-pumpkin-o mr-3 text-accent"></i>HL万圣节趣味单
             </h1>
-            <!-- 已删除全局配置按钮 -->
         </div>
         
         <!-- 操作提示 -->
@@ -419,9 +418,6 @@
                 <div class="flex space-x-4 justify-center">
                     <button id="reset-game" class="bg-white/30 hover:bg-white/40 text-white px-6 py-3 rounded-lg flex items-center backdrop-blur-sm">
                         <i class="fa fa-refresh mr-2"></i> 重新开始
-                    </button>
-                    <button id="back-to-items" class="bg-white/30 hover:bg-white/40 text-white px-6 py-3 rounded-lg flex items-center backdrop-blur-sm">
-                        <i class="fa fa-arrow-left mr-2"></i> 修改道具
                     </button>
                 </div>
             </div>
@@ -639,7 +635,6 @@
         const currentPosition = document.getElementById('current-position');
         const gameStatus = document.getElementById('game-status');
         const resetGameBtn = document.getElementById('reset-game');
-        const backToItemsBtn = document.getElementById('back-to-items');
         const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
         
@@ -764,9 +759,6 @@
         
         // 选择道具
         function selectItem(item) {
-            // 如果已经进入游戏，不能选择道具
-            if (gameState.gameActive) return;
-            
             // 移除其他卡片的激活状态
             document.querySelectorAll('.item-card').forEach(card => {
                 card.classList.remove('item-active');
@@ -962,7 +954,6 @@
             nextToItemsBtn.addEventListener('click', () => switchStage('item-placement'));
             nextToGameBtn.addEventListener('click', startGame);
             backToModeBtn.addEventListener('click', returnToModeSelection);
-            backToItemsBtn.addEventListener('click', returnToItemPlacement);
             resetGameBtn.addEventListener('click', returnToModeSelection);
             playAgainBtn.addEventListener('click', () => {
                 winnerModal.classList.add('hidden');
@@ -988,11 +979,13 @@
             // 清除所有道具（道具放置阶段）
             clearAllItemsPrep.addEventListener('click', clearAllItems);
             
-            // 道具触发提示框
+            // 道具触发提示框 - 修改：点击继续不自动前进
             continueButton.addEventListener('click', () => {
                 itemTriggerModal.classList.add('hidden');
-                // 继续前进（额外回合）
-                moveForward();
+                // 恢复按钮可点击状态
+                moveButton.disabled = false;
+                moveButton.classList.remove('opacity-70');
+                moveValue.textContent = '点击按钮继续前进';
             });
             
             // 胜利模态框
