@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HL万圣节趣味单</title>
+    <!-- Tail    部署部署说明：
+    1. 将此文件保存为index.html并上传到GitHub仓库
+    2. 启用GitHub Pages后，玩家通过主链接进入游戏
+    3. 观众可通过分享链接在其他设备观看实时游戏
+    -->
+    <!-- Tail    功能特点：
+    - 玩家模式：操作游戏，实时同步状态到本地存储
+    - 观众模式：通过分享链接观看，自动同步玩家操作
+    - 跨设备同步：基于localStorage+游戏ID实现状态共享
+    - 断线重连：观众端自动自动检测自动游戏状态变化
+    -->
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome-awesome.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B5CF6',
+                        secondary: '#EC4899',
+                        accent: '#FBBF24',
+                        danger: '#EF4444',
+                        light: '#F3F4F6',
+                        dark: '#1F2937',
+                        spectator: '#3B82F6'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 2s infinite',
+                        'celebrate': 'celebrate 0.5s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        celebrate: {
+                            '0%': { transform: 'scale(1)' },
+                            '100%': { transform: 'scale(1.2)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            }
+            .square-active {
+                border: 2px solid #FBBF24;
+                box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+            }
+            .gradient-card {
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+            .mode-active {
+                border-color: #FBBF24;
+                background-color: rgba(251, 191, 36, 0.2);
+                box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+            }
+            .spectator-badge {
+                background-color: rgba(59, 130, 246, 0.2);
+                border: 1px solid rgba(59, 130, 246, 0.4);
+            }
+        }
+    </style>
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.75rem;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .square {
+            aspect-ratio: 1/1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.25rem;
+            border-radius: 0.75rem;
+            position: relative;
+            transition: all 0.3s ease;
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+        
+        .square:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .square.current {
+            background-color: #FBBF24;
+            color: #1F2937;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.7);
+            z-index: 5;
+        }
+        
+        .player {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+            top: 24px;
+            right: 24px;
+        }
+        
+        .player-1 {
+            background-color: #EF4444;
+        }
+        
+        .item-marker {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            background-color: #FBBF24;
+            color: #1F2937;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .item-marker:hover + .item-tooltip {
+            display: block;
+        }
+        
+        .item-tooltip {
+            position: absolute;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1F2937;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 15;
+            display: none;
+        }
+        
+        #move-button, #start-game, #next-to-items, #next-to-game {
+            background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        }
+        
+        #move-button:hover, #start-game:hover, #next-to-items:hover, #next-to-game:hover {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+        
+        .item-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .item-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .item-active {
+            border: 2px solid #FBBF24;
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.7);
+        }
+        
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: fall 3s linear forwards;
+            z-index: 100;
+        }
+        
+        @keyframes fall {
+            to {
+                transform: translateY(100vh);
+                opacity: 0;
+            }
+        }
+        
+        /* 介绍卡片样式 */
+        .intro-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .intro-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 模式选择按钮样式 */
+        .mode-btn {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        /* 阶段容器样式 */
+        .stage-container {
+            display: none;
+        }
+        
+        .stage-container.active {
+            display: block;
+        }
+        
+        /* 观众模式样式 */
+        .spectator-overlay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 10px 15px;
+            border-radius: 20px;
+            color: #3B82F6;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        
+        .spectator-mode .interactive-element {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        
+        .share-link-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .share-link {
+            flex-grow: 1;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.1);
+            font-size: 0.875rem;
+            color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* 同步状态指示器 */
+        .sync-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            z-index: 999;
+        }
+        
+        .sync-status.connected {
+            background-color: rgba(0, 255, 0, 0.5);
+        }
+        
+        .sync-status.disconnected {
+            background-color: rgba(255, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans text-dark">
+    <!-- 同步状态指示器 -->
+    <div id="sync-status" class="sync-status">
+        <i class="fa fa-circle-o-notch fa-spin mr-1"></i> 等待同步...
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- 页面标题 -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-white flex items-center">
+                <i class="fa fa-pumpkin-o mr-3 text-accent"></i>HL万圣节趣味单
+            </h1>
+            <!-- 游戏角色选择 -->
+            <div class="flex gap-3">
+                <button id="play-as-player" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center backdrop-blur-sm interactive-element">
+                    <i class="fa fa-user mr-2"></i> 玩家
+                </button>
+                <button id="play-as-spectator" class="bg-spectator/20 hover:bg-spectator/30 text-spectator px-4 py-2 rounded-lg flex items-center backdrop-blur-sm interactive-element">
+                    <i class="fa fa-eye mr-2"></i> 观众
+                </button>
+            </div>
+        </div>
+        
+        <!-- 分享链接区域 -->
+        <div id="share-section" class="max-w-md mx-auto mb-6 bg-white/20 rounded-xl p-4 backdrop-blur-md hidden">
+            <div class="flex justify-between items-center mb-2">
+                <span class="font-bold text-white">分享游戏</span>
+                <span class="text-xs text-white/70">他人可通过链接观看游戏</span>
+            </div>
+            <div class="share-link-container">
+                <input type="text" id="game-share-link" class="share-link" readonly>
+                <button id="copy-share-link" class="bg-white/30 hover:bg-white/40 text-white p-2 rounded-lg interactive-element">
+                    <i class="fa fa-copy"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 操作提示 -->
+        <p class="text-center text-white/90 mb-6 text-lg" id="stage-instruction">选择游戏难度，开始你的万圣节趣味之旅！</p>
+        
+        <!-- 第一阶段：模式选择与游戏介绍 -->
+        <div id="mode-selection-stage" class="stage-container active">
+            <!-- 游戏介绍区域 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- 趣味玩法 -->
+                <div class="intro-card gradient-card rounded-xl p-6 text-white">
+                    <div class="flex items-center mb-4">
+                        <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-3">
+                            <i class="fa fa-gamepad text-2xl text-accent"></i>
+                        </div>
+                        <h3 class="text-xl font-bold">趣味玩法</h3>
+                    </div>
+                    <ul class="space-y-2 text-white/90">
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>前进条件:双打手总计人头数1个可以前进一格</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>后退条件:摸到1-2格红包,摸到4格红包退2步,摸到6格红包退3步</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>撤退失败的红包计入打手人头不计入后退步数</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>摸到特殊格子后退6步</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- 道具系统 -->
+                <div class="intro-card gradient-card rounded-xl p-6 text-white">
+                    <div class="flex items-center mb-4">
+                        <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-3">
+                            <i class="fa fa-gift text-2xl text-accent"></i>
+                        </div>
+                        <h3 class="text-xl font-bold">道具系统</h3>
+                    </div>
+                    <ul class="space-y-2 text-white/90">
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>总共有9张道具卡可自选</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>普通版可以选3张道具卡</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>困难版可以选6张道具卡</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
+                            <span>触发道具后获得特殊效果</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 模式选择区域 -->
+            <div class="max-w-md mx-auto mb-8 bg-white/20 rounded-xl p-6 backdrop-blur-md">
+                <h3 class="text-xl font-bold text-white mb-6 text-center">选择游戏模式</h3>
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="mode-btn mode-active border-2 rounded-lg p-6 text-center text-white interactive-element">
+                        <h4 class="font-bold text-accent mb-3">普通版</h4>
+                        <p class="text-sm">可选择3张道具卡</p>
+                        <div class="mt-4 text-sm text-white/80">适合新手体验</div>
+                    </div>
+                    <div class="mode-btn border-2 border-transparent rounded-lg p-6 text-center text-white interactive-element">
+                        <h4 class="font-bold text-white mb-3">困难版</h4>
+                        <p class="text-sm">可选择6张道具卡</p>
+                        <div class="mt-4 text-sm text-white/80">挑战更多乐趣</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 下一步按钮 -->
+            <div class="flex justify-center">
+                <button id="next-to-items" class="text-dark text-xl font-bold py-3 px-8 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 interactive-element">
+                    进入道具配置 <i class="fa fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 第二阶段：道具放置 -->
+        <div id="item-placement-stage" class="stage-container">
+            <!-- 道具放置区 -->
+            <div class="bg-white/20 rounded-xl p-4 mb-6 max-w-md mx-auto backdrop-blur-md">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold text-white">道具操作</span>
+                    <button id="clear-all-items-prep" class="text-white hover:text-accent text-sm interactive-element">
+                        <i class="fa fa-trash mr-1"></i> 清除所有道具
+                    </button>
+                </div>
+                <div id="placed-items-count-prep" class="text-white py-2 px-3 bg-white/10 rounded-lg min-h-[40px]">
+                    已放置道具：0/3（普通版最多放置3个）
+                </div>
+            </div>
+            
+            <!-- 道具列表与选择区 -->
+            <div class="bg-white/20 rounded-xl p-4 mb-6 max-w-md mx-auto backdrop-blur-md">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold text-white">选择道具（点击放置）</span>
+                    <button id="show-items-prep" class="text-white hover:text-accent text-sm interactive-element">
+                        <i class="fa fa-info-circle mr-1"></i> 道具说明
+                    </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-3" id="item-selection-grid-prep">
+                    <!-- 道具选择卡片将动态生成 -->
+                </div>
+            </div>
+            
+            <!-- 棋盘区域（道具放置阶段） -->
+            <div class="game-board mb-8" id="game-board-prep">
+                <!-- 棋盘格子将通过JavaScript动态生成 -->
+            </div>
+            
+            <!-- 按钮区域 -->
+            <div class="flex justify-center space-x-4">
+                <button id="back-to-mode" class="bg-white/30 hover:bg-white/40 text-white px-6 py-3 rounded-full shadow-lg transition-all duration-300 interactive-element">
+                    <i class="fa fa-arrow-left mr-2"></i> 返回模式选择
+                </button>
+                <button id="next-to-game" class="text-dark text-xl font-bold py-3 px-8 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 interactive-element">
+                    开始游戏 <i class="fa fa-play ml-2"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 第三阶段：游戏阶段 -->
+        <div id="game-stage" class="stage-container">
+            <!-- 进度指示器 -->
+            <div class="max-w-2xl mx-auto mb-6 bg-white/20 rounded-xl p-4 backdrop-blur-md">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-white font-medium">当前进度</span>
+                    <span id="progress-text" class="text-white font-bold text-lg">1/20</span>
+                </div>
+                <div class="w-full bg-white/30 rounded-full h-3">
+                    <div id="progress-bar" class="bg-accent h-3 rounded-full transition-all duration-500 ease-out" style="width: 5%"></div>
+                </div>
+            </div>
+            
+            <!-- 游戏标题与操作提示 -->
+            <header class="text-center mb-6">
+                <h1 class="text-4xl font-bold text-white mb-2 text-shadow">二十格前进游戏</h1>
+                <p class="text-lg text-white/90 mb-2">点击前进按钮移动，触发格子道具效果</p>
+            </header>
+            
+            <!-- 游戏状态 -->
+            <div class="bg-white/20 rounded-xl p-4 mb-6 max-w-md mx-auto backdrop-blur-md">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <span class="font-bold text-white">当前位置：</span>
+                        <span id="current-position" class="ml-2 font-semibold text-white">第 1 格</span>
+                    </div>
+                    <div id="game-status" class="text-sm font-medium text-white">游戏进行中</div>
+                </div>
+            </div>
+            
+            <!-- 前进按钮区域 -->
+            <div class="flex flex-col items-center justify-center mb-6">
+                <button id="move-button" class="text-dark text-2xl font-bold py-4 px-10 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 interactive-element">
+                    <i class="fa fa-arrow-right mr-2"></i> 前进一格
+                </button>
+                <div id="move-value" class="text-center mt-4 text-xl font-bold text-white">点击按钮前进</div>
+            </div>
+            
+            <!-- 棋盘区域（游戏阶段） -->
+            <div class="game-board mb-8" id="game-board">
+                <!-- 棋盘格子将通过JavaScript动态生成 -->
+            </div>
+            
+            <!-- 游戏控制区 -->
+            <div class="bg-white/20 rounded-lg p-6 max-w-md mx-auto backdrop-blur-md">
+                <h2 class="text-xl font-bold mb-4 text-center text-white">游戏控制</h2>
+                
+                <!-- 游戏控制按钮 -->
+                <div class="flex space-x-4 justify-center">
+                    <button id="reset-game" class="bg-white/30 hover:bg-white/40 text-white px-6 py-3 rounded-lg flex items-center backdrop-blur-sm interactive-element">
+                        <i class="fa fa-refresh mr-2"></i> 重新开始
+                    </button>
+                    <button id="back-to-items" class="bg-white/30 hover:bg-white/40 text-white px-6 py-3 rounded-lg flex items-center backdrop-blur-sm interactive-element">
+                        <i class="fa fa-arrow-left mr-2"></i> 修改道具
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 道具说明模态框 -->
+        <div id="items-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">道具列表</h3>
+                    <button id="close-items" class="text-gray-500 hover:text-gray-700 interactive-element">
+                        <i class="fa fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div class="item-modal-content space-y-4 max-h-72 overflow-y-auto">
+                    <div class="item-card p-3 bg-red-50 rounded-lg">
+                        <h4 class="font-bold text-red-600">不给糖就捣蛋</h4>
+                        <p class="text-sm text-gray-600">开局老板指定一个任意红，若出了老板另多选任选一张道具卡给陪玩使用，只能触发一次，触发过后此道具卡失效</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-purple-50 rounded-lg">
+                        <h4 class="font-bold text-purple-600">我不是歌神</h4>
+                        <p class="text-sm text-gray-600">双打手需要唱一段7-15s的歌</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-gray-50 rounded-lg">
+                        <h4 class="font-bold text-gray-600">我是压力怪</h4>
+                        <p class="text-sm text-gray-600">当局一名打手必须一直压力另一位打手</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-yellow-50 rounded-lg">
+                        <h4 class="font-bold text-yellow-600">cos小猫</h4>
+                        <p class="text-sm text-gray-600">当局打手必须说完话后边加上"喵"</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-green-50 rounded-lg">
+                        <h4 class="font-bold text-green-600">吃我一技</h4>
+                        <p class="text-sm text-gray-600">该局打手释放英雄技能必须喊出来技能名字</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-pink-50 rounded-lg">
+                        <h4 class="font-bold text-pink-600">甜蜜蜜</h4>
+                        <p class="text-sm text-gray-600">双打手当局需要互相甜蜜进行游戏</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-blue-50 rounded-lg">
+                        <h4 class="font-bold text-blue-600">cos小鬼</h4>
+                        <p class="text-sm text-gray-600">双打手各自扮演小鬼，例如可爱鬼、胆小鬼这种，游戏对局中，互相称呼变成扮演的小鬼名称</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-orange-50 rounded-lg">
+                        <h4 class="font-bold text-orange-600">我会说方言</h4>
+                        <p class="text-sm text-gray-600">双打手当局游戏必须用方言沟通</p>
+                    </div>
+                    
+                    <div class="item-card p-3 bg-teal-50 rounded-lg">
+                        <h4 class="font-bold text-teal-600">绝活小鬼</h4>
+                        <p class="text-sm text-gray-600">老板指定一段话10-15字，双打手必须含水读出来</p>
+                    </div>
+                </div>
+                <div class="mt-6 text-center">
+                    <button id="close-items-btn" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary/80 interactive-element">关闭</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 胜利模态框 -->
+        <div id="winner-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md mx-auto text-center">
+                <div class="winner-animation mb-4">
+                    <i class="fa fa-trophy text-6xl text-yellow-500"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-2">恭喜！</h3>
+                <p id="winner-text" class="text-xl mb-6">恭喜你获胜！</p>
+                <div class="flex space-x-4 justify-center">
+                    <button id="play-again" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary/80 interactive-element">再玩一次</button>
+                    <button id="close-winner" class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 interactive-element">关闭</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 道具触发提示框 -->
+        <div id="item-trigger-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md mx-4 text-center">
+                <div class="mb-4 text-4xl">
+                    <i class="fa fa-magic text-purple-500 winner-animation"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-2">触发道具效果！</h3>
+                <p id="item-trigger-name" class="text-xl font-medium mb-4"></p>
+                <p id="item-trigger-desc" class="text-gray-600 mb-6">获得额外前进1次的机会！</p>
+                <button id="continue-button" class="bg-accent text-dark px-6 py-3 rounded-lg hover:bg-accent/80 interactive-element">继续前进</button>
+            </div>
+        </div>
+        
+        <!-- 观众模式标识 -->
+        <div id="spectator-badge" class="spectator-overlay spectator-badge hidden">
+            <i class="fa fa-eye mr-2"></i> 观众模式
+        </div>
+    </div>
+
+    <script>
+        // 游戏配置
+        const GAME_CONFIG = {
+            totalSquares: 20,
+            modes: {
+                normal: {
+                    name: "普通版",
+                    maxItems: 3
+                },
+                hard: {
+                    name: "困难版",
+                    maxItems: 6
+                }
+            },
+            // 道具列表
+            items: [
+                {
+                    id: 1,
+                    name: "不给糖就捣蛋",
+                    icon: "🍬",
+                    description: "开局老板指定一个任意红，若出了老板另多选任选一张道具卡给陪玩使用，只能触发一次，触发过后此道具卡失效"
+                },
+                {
+                    id: 2,
+                    name: "我不是歌神",
+                    icon: "🎤",
+                    description: "双打手需要唱一段7-15s的歌"
+                },
+                {
+                    id: 3,
+                    name: "我是压力怪",
+                    icon: "💥",
+                    description: "当局一名打手必须一直压力另一位打手"
+                },
+                {
+                    id: 4,
+                    name: "cos小猫",
+                    icon: "🐱",
+                    description: "当局打手必须说完话后边加上\"喵\""
+                },
+                {
+                    id: 5,
+                    name: "吃我一技",
+                    icon: "⚔️",
+                    description: "该局打手释放英雄技能必须喊出来技能名字"
+                },
+                {
+                    id: 6,
+                    name: "甜蜜蜜",
+                    icon: "❤️",
+                    description: "双打手当局需要互相甜蜜进行游戏"
+                },
+                {
+                    id: 7,
+                    name: "cos小鬼",
+                    icon: "🎭",
+                    description: "双打手各自扮演小鬼，例如可爱鬼、胆小鬼这种，游戏对局中，互相称呼变成扮演的小鬼名称"
+                },
+                {
+                    id: 8,
+                    name: "我会说方言",
+                    icon: "🗣️",
+                    description: "双打手当局游戏必须用方言沟通"
+                },
+                {
+                    id: 9,
+                    name: "绝活小鬼",
+                    icon: "🎯",
+                    description: "老板指定一段话10-15字，双打手必须含水读出来"
+                }
+            ]
+        };
+        
+        // 游戏状态
+        let gameState = {
+            position: 1, // 玩家当前位置
+            gameActive: false, // 游戏是否进行中
+            placedItems: {}, // 已放置的道具 {位置: 道具信息}
+            selectedItem: null, // 当前选中的道具
+            bonusTurn: false, // 是否有额外回合
+            currentMode: "normal", // 当前模式，默认普通版
+            isSpectator: false, // 是否为观众模式
+            gameId: generateGameId(), // 游戏唯一ID，用于分享
+            lastSyncTime: 0 // 最后同步时间
+        };
+        
+        // DOM元素 - 同步状态指示器
+        const syncStatus = document.getElementById('sync-status');
+        
+        // DOM元素 - 观众/玩家模式相关
+        const playAsPlayerBtn = document.getElementById('play-as-player');
+        const playAsSpectatorBtn = document.getElementById('play-as-spectator');
+        const spectatorBadge = document.getElementById('spectator-badge');
+        const shareSection = document.getElementById('share-section');
+        const gameShareLink = document.getElementById('game-share-link');
+        const copyShareLinkBtn = document.getElementById('copy-share-link');
+        
+        // DOM元素 - 通用
+        const winnerModal = document.getElementById('winner-modal');
+        const winnerText = document.getElementById('winner-text');
+        const playAgainBtn = document.getElementById('play-again');
+        const closeWinnerBtn = document.getElementById('close-winner');
+        const itemsModal = document.getElementById('items-modal');
+        const closeItemsBtn = document.getElementById('close-items');
+        const closeItemsBtn2 = document.getElementById('close-items-btn');
+        const itemTriggerModal = document.getElementById('item-trigger-modal');
+        const itemTriggerName = document.getElementById('item-trigger-name');
+        const itemTriggerDesc = document.getElementById('item-trigger-desc');
+        const continueButton = document.getElementById('continue-button');
+        const stageInstruction = document.getElementById('stage-instruction');
+        
+        // DOM元素 - 阶段容器
+        const modeSelectionStage = document.getElementById('mode-selection-stage');
+        const itemPlacementStage = document.getElementById('item-placement-stage');
+        const gameStage = document.getElementById('game-stage');
+        
+        // DOM元素 - 模式选择阶段
+        const nextToItemsBtn = document.getElementById('next-to-items');
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        
+        // DOM元素 - 道具放置阶段
+        const gameBoardPrep = document.getElementById('game-board-prep');
+        const itemSelectionGridPrep = document.getElementById('item-selection-grid-prep');
+        const placedItemsCountPrep = document.getElementById('placed-items-count-prep');
+        const clearAllItemsPrep = document.getElementById('clear-all-items-prep');
+        const showItemsPrep = document.getElementById('show-items-prep');
+        const nextToGameBtn = document.getElementById('next-to-game');
+        const backToModeBtn = document.getElementById('back-to-mode');
+        
+        // DOM元素 - 游戏阶段
+        const gameBoard = document.getElementById('game-board');
+        const moveButton = document.getElementById('move-button');
+        const moveValue = document.getElementById('move-value');
+        const currentPosition = document.getElementById('current-position');
+        const gameStatus = document.getElementById('game-status');
+        const resetGameBtn = document.getElementById('reset-game');
+        const backToItemsBtn = document.getElementById('back-to-items');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        
+        // 生成游戏唯一ID（确保跨设备唯一性）
+        function generateGameId() {
+            // 结合时间戳和随机数生成唯一ID
+            return 'hg_' + Date.now().toString(36) + '_' + 
+                   Math.random().toString(36).substring(2, 8);
+        }
+        
+        // 创建分享链接（适配GitHub Pages）
+        function createShareLink() {
+            // 获取当前页面URL（自动适配GitHub Pages路径）
+            const baseUrl = window.location.href.split('?')[0];
+            return `${baseUrl}?gameId=${gameState.gameId}&spectator=true`;
+        }
+        
+        // 更新同步状态显示
+        function updateSyncStatus(status) {
+            syncStatus.className = 'sync-status';
+            
+            if (status === 'connected') {
+                syncStatus.classList.add('connected');
+                syncStatus.innerHTML = '<i class="fa fa-check mr-1"></i> 同步中';
+            } else if (status === 'disconnected') {
+                syncStatus.classList.add('disconnected');
+                syncStatus.innerHTML = '<i class="fa fa-exclamation-triangle mr-1"></i> 同步中断';
+            } else {
+                syncStatus.innerHTML = '<i class="fa fa-circle-o-notch fa-spin mr-1"></i> 等待同步...';
+            }
+        }
+        
+        // 切换到玩家模式
+        function switchToPlayerMode() {
+            gameState.isSpectator = false;
+            document.body.classList.remove('spectator-mode');
+            spectatorBadge.classList.add('hidden');
+            shareSection.classList.remove('hidden'); // 玩家可以看到分享链接
+            
+            // 更新按钮样式
+            playAsPlayerBtn.classList.remove('bg-white/20', 'hover:bg-white/30', 'text-white');
+            playAsPlayerBtn.classList.add('bg-white/30', 'hover:bg-white/40', 'text-white');
+            playAsSpectatorBtn.classList.remove('bg-spectator/30', 'hover:bg-spectator/40', 'text-spectator');
+            playAsSpectatorBtn.classList.add('bg-spectator/20', 'hover:bg-spectator/30', 'text-spectator');
+            
+            // 更新分享链接
+            gameShareLink.value = createShareLink();
+            
+            // 更新同步状态
+            updateSyncStatus('connected');
+            
+            // 保存游戏状态（玩家模式激活）
+            saveGameState();
+        }
+        
+        // 切换到观众模式
+        function switchToSpectatorMode() {
+            gameState.isSpectator = true;
+            document.body.classList.add('spectator-mode');
+            spectatorBadge.classList.remove('hidden');
+            
+            // 观众看不到分享链接（只有玩家能看到）
+            shareSection.classList.add('hidden');
+            
+            // 更新按钮样式
+            playAsPlayerBtn.classList.remove('bg-white/30', 'hover:bg-white/40', 'text-white');
+            playAsPlayerBtn.classList.add('bg-white/20', 'hover:bg-white/30', 'text-white');
+            playAsSpectatorBtn.classList.remove('bg-spectator/20', 'hover:bg-spectator/30', 'text-spectator');
+            playAsSpectatorBtn.classList.add('bg-spectator/30', 'hover:bg-spectator/40', 'text-spectator');
+            
+            // 更新提示信息
+            if (gameState.gameActive) {
+                stageInstruction.textContent = "观众模式：你可以观看游戏，但不能进行操作";
+            } else {
+                stageInstruction.textContent = "观众模式：等待玩家开始游戏...";
+            }
+            
+            // 立即尝试同步
+            loadGameState();
+        }
+        
+        // 复制分享链接
+        function copyShareLink() {
+            gameShareLink.select();
+            document.execCommand('copy');
+            
+            // 显示复制成功提示
+            const originalText = copyShareLinkBtn.innerHTML;
+            copyShareLinkBtn.innerHTML = '<i class="fa fa-check"></i>';
+            setTimeout(() => {
+                copyShareLinkBtn.innerHTML = originalText;
+            }, 2000);
+        }
+        
+        // 初始化游戏
+        function initGame() {
+            // 检查URL参数，自动进入观众模式
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('spectator') === 'true') {
+                // 使用URL中的游戏ID
+                gameState.gameId = params.get('gameId') || generateGameId();
+                switchToSpectatorMode();
+            } else {
+                // 尝试从本地存储恢复游戏（如果有）
+                const savedState = localStorage.getItem(`halloween_game_${gameState.gameId}`);
+                if (savedState) {
+                    try {
+                        const parsed = JSON.parse(savedState);
+                        gameState = { ...gameState, ...parsed };
+                    } catch (e) {
+                        console.log('无法恢复游戏状态，将创建新游戏');
+                    }
+                }
+                switchToPlayerMode(); // 默认玩家模式
+            }
+            
+            // 初始化模式选择阶段
+            initModeSelectionStage();
+            
+            // 添加事件监听器
+            addEventListeners();
+            
+            // 初始化分享链接
+            gameShareLink.value = createShareLink();
+        }
+        
+        // 初始化模式选择阶段
+        function initModeSelectionStage() {
+            // 设置阶段提示
+            if (gameState.isSpectator) {
+                stageInstruction.textContent = "观众模式：等待玩家选择游戏难度...";
+            } else {
+                stageInstruction.textContent = "选择游戏难度，开始你的万圣节趣味之旅！";
+            }
+        }
+        
+        // 初始化道具放置阶段
+        function initItemPlacementStage() {
+            // 设置阶段提示
+            if (gameState.isSpectator) {
+                stageInstruction.textContent = "观众模式：观看玩家配置道具...";
+            } else {
+                stageInstruction.textContent = "选择道具并放置到棋盘上，完成后进入游戏";
+            }
+            
+            // 创建棋盘
+            createBoard(gameBoardPrep);
+            
+            // 生成道具选择卡片
+            createItemSelectionCards(itemSelectionGridPrep);
+            
+            // 更新已放置道具计数
+            updatePlacedItemsCount();
+        }
+        
+        // 初始化游戏阶段
+        function initGameStage() {
+            // 设置阶段提示
+            if (gameState.isSpectator) {
+                stageInstruction.textContent = "观众模式：观看游戏进行...";
+            } else {
+                stageInstruction.textContent = "点击前进按钮移动，触发格子上的道具效果";
+            }
+            
+            // 创建游戏阶段的棋盘（不显示道具标记）
+            createBoard(gameBoard, true);
+            
+            // 初始化玩家位置
+            updatePlayerPosition();
+            
+            // 更新游戏状态显示
+            updateGameStatus();
+            
+            // 更新进度指示器
+            updateProgressIndicator();
+        }
+        
+        // 切换阶段
+        function switchStage(stageName) {
+            // 隐藏所有阶段
+            modeSelectionStage.classList.remove('active');
+            itemPlacementStage.classList.remove('active');
+            gameStage.classList.remove('active');
+            
+            // 显示目标阶段
+            if (stageName === 'mode-selection') {
+                modeSelectionStage.classList.add('active');
+                initModeSelectionStage();
+            } else if (stageName === 'item-placement') {
+                itemPlacementStage.classList.add('active');
+                initItemPlacementStage();
+            } else if (stageName === 'game') {
+                stageInstruction.textContent = gameState.isSpectator ? 
+                    "观众模式：观看游戏进行..." : 
+                    "点击前进按钮移动，触发格子道具效果";
+                gameStage.classList.add('active');
+                initGameStage();
+            }
+            
+            // 同步游戏状态到本地存储
+            saveGameState();
+        }
+        
+        // 保存游戏状态到localStorage（增强版）
+        function saveGameState() {
+            try {
+                // 存储完整的游戏状态，包含时间戳用于同步判断
+                const stateToSave = {
+                    ...gameState,
+                    timestamp: new Date().getTime()
+                };
+                localStorage.setItem(`halloween_game_${gameState.gameId}`, JSON.stringify(stateToSave));
+                
+                // 更新最后同步时间
+                gameState.lastSyncTime = stateToSave.timestamp;
+                
+                // 如果是玩家，更新同步状态
+                if (!gameState.isSpectator) {
+                    updateSyncStatus('connected');
+                }
+            } catch (e) {
+                console.error('保存游戏状态失败:', e);
+                if (!gameState.isSpectator) {
+                    updateSyncStatus('disconnected');
+                }
+            }
+        }
+        
+        // 获取当前阶段
+        function getCurrentStage() {
+            if (modeSelectionStage.classList.contains('active')) return 'mode-selection';
+            if (itemPlacementStage.classList.contains('active')) return 'item-placement';
+            if (gameStage.classList.contains('active')) return 'game';
+            return 'mode-selection';
+        }
+        
+        // 加载游戏状态（观众模式用，增强版）
+        function loadGameState() {
+            if (!gameState.isSpectator) return;
+            
+            try {
+                const savedState = localStorage.getItem(`halloween_game_${gameState.gameId}`);
+                if (savedState) {
+                    const parsedState = JSON.parse(savedState);
+                    const now = new Date().getTime();
+                    
+                    // 只同步3分钟内的状态（避免读取过期数据）
+                    if (now - parsedState.timestamp < 3 * 60 * 1000) {
+                        // 只有当状态有更新时才同步
+                        if (parsedState.timestamp > gameState.lastSyncTime) {
+                            // 保存当前阶段
+                            const currentStage = getCurrentStage();
+                            
+                            // 更新游戏状态
+                            gameState = { ...gameState, ...parsedState, isSpectator: true };
+                            
+                            // 更新最后同步时间
+                            gameState.lastSyncTime = parsedState.timestamp;
+                            
+                            // 如果阶段不同，切换阶段
+                            if (currentStage !== parsedState.currentStage) {
+                                switchStage(parsedState.currentStage);
+                            } else {
+                                // 更新当前阶段的UI
+                                if (currentStage === 'game') {
+                                    updatePlayerPosition();
+                                    updateGameStatus();
+                                    updateProgressIndicator();
+                                } else if (currentStage === 'item-placement') {
+                                    createBoard(gameBoardPrep);
+                                    updatePlacedItemsCount();
+                                }
+                            }
+                            
+                            updateSyncStatus('connected');
+                            return;
+                        }
+                    } else {
+                        // 状态过期
+                        updateSyncStatus('disconnected');
+                        stageInstruction.textContent = "观众模式：游戏连接已过期，请获取新的分享链接";
+                    }
+                } else {
+                    // 未找到游戏状态
+                    updateSyncStatus('disconnected');
+                    stageInstruction.textContent = "观众模式：未找到游戏，请确认分享链接正确";
+                }
+            } catch (e) {
+                console.error('加载游戏状态失败:', e);
+                updateSyncStatus('disconnected');
+            }
+        }
+        
+        // 创建棋盘
+        function createBoard(boardElement, isGameStage = false) {
+            boardElement.innerHTML = '';
+            
+            for (let i = 1; i <= GAME_CONFIG.totalSquares; i++) {
+                const square = document.createElement('div');
+                square.classList.add('square');
+                square.dataset.number = i;
+                square.innerHTML = `<span class="text-white text-shadow">${i}</span>`;
+                
+                // 如果是准备阶段，添加格子点击事件（放置道具）并显示已放置的道具
+                if (!isGameStage) {
+                    square.addEventListener('click', () => placeItemOnSquare(i));
+                    
+                    // 准备阶段显示道具
+                    if (gameState.placedItems[i]) {
+                        square.innerHTML += `
+                            <div class="item-marker">${gameState.placedItems[i].icon}</div>
+                            <div class="item-tooltip">${gameState.placedItems[i].name}</div>
+                        `;
+                    }
+                } 
+                // 游戏阶段不显示道具标记，保持格子干净
+                else {
+                    // 不添加任何道具标记
+                }
+                
+                boardElement.appendChild(square);
+            }
+        }
+        
+        // 生成道具选择卡片
+        function createItemSelectionCards(container) {
+            container.innerHTML = '';
+            
+            GAME_CONFIG.items.forEach(item => {
+                const card = document.createElement('div');
+                card.classList.add('item-card', 'bg-white/80', 'rounded-lg', 'p-3', 'backdrop-blur-sm', 'interactive-element');
+                card.innerHTML = `
+                    <div class="flex flex-col items-center">
+                        <span class="text-xl mb-2">${item.icon}</span>
+                        <span class="font-medium text-center">${item.name}</span>
+                    </div>
+                `;
+                
+                // 添加点击事件
+                card.addEventListener('click', () => selectItem(item));
+                
+                container.appendChild(card);
+            });
+        }
+        
+        // 选择道具
+        function selectItem(item) {
+            // 如果已经进入游戏或处于观众模式，不能选择道具
+            if (gameState.gameActive || gameState.isSpectator) return;
+            
+            // 移除其他卡片的激活状态
+            document.querySelectorAll('.item-card').forEach(card => {
+                card.classList.remove('item-active');
+            });
+            
+            // 添加当前卡片的激活状态
+            const cards = itemSelectionGridPrep.querySelectorAll('.item-card');
+            cards[item.id - 1].classList.add('item-active');
+            
+            // 更新游戏状态
+            gameState.selectedItem = item;
+        }
+        
+        // 在格子上放置道具
+        function placeItemOnSquare(position) {
+            // 如果是观众模式，不能放置道具
+            if (gameState.isSpectator) return;
+            
+            const currentMaxItems = GAME_CONFIG.modes[gameState.currentMode].maxItems;
+            const currentCount = Object.keys(gameState.placedItems).length;
+            
+            // 检查是否已达到当前模式的最大道具数量
+            if (currentCount >= currentMaxItems && !gameState.placedItems[position]) {
+                return;
+            }
+            
+            // 如果没有选中道具，不执行操作
+            if (!gameState.selectedItem) {
+                return;
+            }
+            
+            // 如果该位置已有道具，替换它
+            if (gameState.placedItems[position]) {
+                // 移除原有道具标记
+                const square = gameBoardPrep.querySelector(`.square[data-number="${position}"]`);
+                const existingMarker = square.querySelector('.item-marker');
+                const existingTooltip = square.querySelector('.item-tooltip');
+                if (existingMarker) existingMarker.remove();
+                if (existingTooltip) existingTooltip.remove();
+            }
+            
+            // 放置新道具
+            gameState.placedItems[position] = gameState.selectedItem;
+            
+            // 在格子上显示道具标记（仅在准备阶段）
+            const square = gameBoardPrep.querySelector(`.square[data-number="${position}"]`);
+            square.innerHTML += `
+                <div class="item-marker">${gameState.selectedItem.icon}</div>
+                <div class="item-tooltip">${gameState.selectedItem.name}</div>
+            `;
+            
+            // 更新已放置道具计数
+            updatePlacedItemsCount();
+            
+            // 清除选中状态
+            document.querySelectorAll('.item-card').forEach(card => {
+                card.classList.remove('item-active');
+            });
+            gameState.selectedItem = null;
+            
+            // 保存游戏状态
+            saveGameState();
+        }
+        
+        // 更新已放置道具计数
+        function updatePlacedItemsCount() {
+            const count = Object.keys(gameState.placedItems).length;
+            const maxItems = GAME_CONFIG.modes[gameState.currentMode].maxItems;
+            const modeName = GAME_CONFIG.modes[gameState.currentMode].name;
+            placedItemsCountPrep.textContent = `已放置道具：${count}/${maxItems}（${modeName}最多放置${maxItems}个）`;
+        }
+        
+        // 切换游戏模式
+        function switchMode(mode) {
+            // 如果已经是当前模式或处于观众模式，不做处理
+            if (gameState.currentMode === mode || gameState.isSpectator) return;
+            
+            // 更新游戏状态
+            gameState.currentMode = mode;
+            
+            // 更新UI
+            modeButtons.forEach((btn, index) => {
+                if ((mode === 'normal' && index === 0) || (mode === 'hard' && index === 1)) {
+                    btn.classList.add('mode-active');
+                    btn.querySelector('h4').classList.add('text-accent');
+                    btn.querySelector('h4').classList.remove('text-white');
+                } else {
+                    btn.classList.remove('mode-active');
+                    btn.querySelector('h4').classList.remove('text-accent');
+                    btn.querySelector('h4').classList.add('text-white');
+                }
+            });
+            
+            // 如果已放置的道具超过新模式的限制，清除超出部分
+            const maxItems = GAME_CONFIG.modes[mode].maxItems;
+            const currentItems = Object.keys(gameState.placedItems);
+            
+            if (currentItems.length > maxItems) {
+                // 只保留前maxItems个道具
+                const itemsToRemove = currentItems.slice(maxItems);
+                itemsToRemove.forEach(position => {
+                    delete gameState.placedItems[position];
+                    
+                    // 移除格子上的道具标记
+                    const square = gameBoardPrep.querySelector(`.square[data-number="${position}"]`);
+                    const marker = square.querySelector('.item-marker');
+                    const tooltip = square.querySelector('.item-tooltip');
+                    if (marker) marker.remove();
+                    if (tooltip) tooltip.remove();
+                });
+            }
+            
+            // 更新计数和UI
+            updatePlacedItemsCount();
+            clearSelection();
+            
+            // 保存游戏状态
+            saveGameState();
+        }
+        
+        // 清除道具选择状态
+        function clearSelection() {
+            document.querySelectorAll('.item-card').forEach(card => {
+                card.classList.remove('item-active');
+            });
+            gameState.selectedItem = null;
+        }
+        
+        // 开始游戏
+        function startGame() {
+            // 如果是观众模式，不能开始游戏
+            if (gameState.isSpectator) return;
+            
+            gameState.gameActive = true;
+            switchStage('game');
+        }
+        
+        // 返回道具放置阶段
+        function returnToItemPlacement() {
+            // 如果是观众模式，不能返回
+            if (gameState.isSpectator) return;
+            
+            gameState.gameActive = false;
+            gameState.position = 1;
+            gameState.bonusTurn = false;
+            switchStage('item-placement');
+        }
+        
+        // 返回模式选择阶段
+        function returnToModeSelection() {
+            // 如果是观众模式，不能返回
+            if (gameState.isSpectator) return;
+            
+            gameState.gameActive = false;
+            gameState.position = 1;
+            gameState.bonusTurn = false;
+            switchStage('mode-selection');
+        }
+        
+        // 更新玩家位置
+        function updatePlayerPosition() {
+            // 移除所有玩家标记
+            document.querySelectorAll('.player').forEach(player => player.remove());
+            
+            // 移除所有格子的高亮状态
+            document.querySelectorAll('.square').forEach(square => {
+                square.classList.remove('current');
+            });
+            
+            // 更新玩家位置
+            const square = gameBoard.querySelector(`.square[data-number="${gameState.position}"]`);
+            
+            if (square) {
+                // 高亮显示当前格子
+                square.classList.add('current');
+                
+                // 添加玩家标记
+                const player = document.createElement('div');
+                player.classList.add('player', 'player-1');
+                square.appendChild(player);
+            }
+            
+            // 更新进度指示器
+            updateProgressIndicator();
+            
+            // 更新当前位置文本
+            currentPosition.textContent = `第 ${gameState.position} 格`;
+            
+            // 保存游戏状态
+            saveGameState();
+        }
+        
+        // 更新进度指示器
+        function updateProgressIndicator() {
+            const progress = (gameState.position / GAME_CONFIG.totalSquares) * 100;
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${gameState.position}/${GAME_CONFIG.totalSquares}`;
+        }
+        
+        // 更新游戏状态显示
+        function updateGameStatus() {
+            if (gameState.bonusTurn) {
+                gameStatus.textContent = '获得额外一次前进机会！';
+                gameStatus.classList.add('text-accent');
+            } else {
+                gameStatus.textContent = '游戏进行中';
+                gameStatus.classList.remove('text-accent');
+            }
+        }
+        
+        // 添加事件监听器
+        function addEventListeners() {
+            // 观众/玩家模式切换
+            playAsPlayerBtn.addEventListener('click', switchToPlayerMode);
+            playAsSpectatorBtn.addEventListener('click', switchToSpectatorMode);
+            
+            // 复制分享链接
+            copyShareLinkBtn.addEventListener('click', copyShareLink);
+            
+            // 阶段切换按钮
+            nextToItemsBtn.addEventListener('click', () => {
+                if (!gameState.isSpectator) {
+                    switchStage('item-placement');
+                }
+            });
+            nextToGameBtn.addEventListener('click', startGame);
+            backToModeBtn.addEventListener('click', returnToModeSelection);
+            backToItemsBtn.addEventListener('click', returnToItemPlacement);
+            resetGameBtn.addEventListener('click', returnToModeSelection);
+            playAgainBtn.addEventListener('click', () => {
+                winnerModal.classList.add('hidden');
+                // 重置游戏ID，开始新游戏
+                gameState.gameId = generateGameId();
+                gameShareLink.value = createShareLink();
+                returnToModeSelection();
+            });
+            
+            // 前进按钮点击事件
+            moveButton.addEventListener('click', moveForward);
+            
+            // 道具模态框
+            showItemsPrep.addEventListener('click', () => {
+                itemsModal.classList.remove('hidden');
+            });
+            
+            closeItemsBtn.addEventListener('click', () => {
+                itemsModal.classList.add('hidden');
+            });
+            
+            closeItemsBtn2.addEventListener('click', () => {
+                itemsModal.classList.add('hidden');
+            });
+            
+            // 清除所有道具（道具放置阶段）
+            clearAllItemsPrep.addEventListener('click', clearAllItems);
+            
+            // 道具触发提示框
+            continueButton.addEventListener('click', () => {
+                itemTriggerModal.classList.add('hidden');
+                // 继续前进（额外回合）
+                moveForward();
+            });
+            
+            // 胜利模态框
+            closeWinnerBtn.addEventListener('click', () => {
+                winnerModal.classList.add('hidden');
+            });
+            
+            // 模式选择事件
+            modeButtons[0].addEventListener('click', () => switchMode('normal'));
+            modeButtons[1].addEventListener('click', () => switchMode('hard'));
+            
+            // 监听本地存储变化，实现更实时的同步（增强功能）
+            window.addEventListener('storage', (e) => {
+                if (e.key === `halloween_game_${gameState.gameId}` && gameState.isSpectator) {
+                    loadGameState(); // 当存储变化时立即同步
+                }
+            });
+            
+            // 观众模式下定期同步（双重保障）
+            if (gameState.isSpectator) {
+                setInterval(loadGameState, 500); // 每500ms同步一次
+            }
+        }
+        
+        // 前进
+        function moveForward() {
+            // 如果游戏未进行或处于观众模式，不执行前进
+            if (!gameState.gameActive || gameState.isSpectator) {
+                return;
+            }
+            
+            // 禁用按钮
+            moveButton.disabled = true;
+            moveButton.classList.add('opacity-70');
+            
+            // 固定前进1格
+            const steps = 1;
+            moveValue.textContent = `前进 ${steps} 格！`;
+            
+            // 显示前进动画
+            setTimeout(() => {
+                // 移动玩家
+                let newPosition = gameState.position + steps;
+                
+                // 检查是否到达终点
+                if (newPosition === GAME_CONFIG.totalSquares) {
+                    // 更新玩家位置
+                    gameState.position = newPosition;
+                    updatePlayerPosition();
+                    
+                    // 结束游戏
+                    endGame();
+                    return;
+                }
+                
+                // 如果超过终点，不能前进
+                if (newPosition > GAME_CONFIG.totalSquares) {
+                    moveValue.textContent = `当前位置 ${gameState.position}，需要正好到达20格才能获胜！`;
+                    moveButton.disabled = false;
+                    moveButton.classList.remove('opacity-70');
+                    return;
+                }
+                
+                // 更新玩家位置
+                gameState.position = newPosition;
+                updatePlayerPosition();
+                
+                // 检查是否触发道具效果
+                checkItemEffect(newPosition);
+                
+                // 如果没有额外回合，恢复按钮状态
+                if (!gameState.bonusTurn) {
+                    setTimeout(() => {
+                        moveValue.textContent = '点击按钮继续前进';
+                        moveButton.disabled = false;
+                        moveButton.classList.remove('opacity-70');
+                    }, 500);
+                }
+                
+                updateGameStatus();
+            }, 800);
+        }
+        
+        // 检查道具效果 - 只有走到该格子才会显示提示
+        function checkItemEffect(position) {
+            const item = gameState.placedItems[position];
+            
+            if (item) {
+                // 显示道具触发提示（只有走到这里才会提示）
+                itemTriggerName.textContent = item.name;
+                itemTriggerDesc.textContent = item.description;
+                itemTriggerModal.classList.remove('hidden');
+                
+                // 标记为已触发（移除道具）
+                delete gameState.placedItems[position];
+                
+                // 设置额外回合
+                gameState.bonusTurn = true;
+            } else {
+                // 没有触发道具，重置额外回合状态
+                gameState.bonusTurn = false;
+            }
+            
+            // 保存游戏状态
+            saveGameState();
+        }
+        
+        // 清除所有道具
+        function clearAllItems() {
+            // 如果是观众模式，不能清除道具
+            if (gameState.isSpectator) return;
+            
+            // 重置游戏状态中的道具
+            gameState.placedItems = {};
+            
+            // 移除所有格子上的道具标记
+            document.querySelectorAll('.item-marker').forEach(marker => marker.remove());
+            document.querySelectorAll('.item-tooltip').forEach(tooltip => tooltip.remove());
+            
+            // 更新计数
+            updatePlacedItemsCount();
+            
+            // 清除选中状态
+            clearSelection();
+            
+            // 保存游戏状态
+            saveGameState();
+        }
+        
+        // 结束游戏
+        function endGame() {
+            gameState.gameActive = false;
+            gameStatus.textContent = '恭喜你获胜！';
+            gameStatus.classList.add('text-accent');
+            
+            // 显示胜利动画
+            createConfetti();
+            
+            // 显示胜利模态框
+            winnerText.textContent = '恭喜你正好到达终点，获得胜利！';
+            winnerModal.classList.remove('hidden');
+            
+            // 恢复按钮状态
+            moveButton.disabled = false;
+            moveButton.classList.remove('opacity-70');
+            
+            // 保存游戏状态
+            saveGameState();
+        }
+        
+        // 创建庆祝效果
+        function createConfetti() {
+            const colors = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff'];
+            
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                confetti.style.left = `${Math.random() * 100}vw`;
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDelay = `${Math.random() * 3}s`;
+                
+                document.body.appendChild(confetti);
+                
+                // 移除庆祝元素
+                setTimeout(() => {
+                    confetti.remove();
+                }, 3000);
+            }
+        }
+        
+        // 初始化游戏
+        window.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
