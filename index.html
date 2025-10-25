@@ -284,11 +284,11 @@
                         </li>
                         <li class="flex items-start">
                             <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
-                            <span>普通版可以选3张道具卡</span>
+                            <span>普通版可以选4张道具卡</span>
                         </li>
                         <li class="flex items-start">
                             <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
-                            <span>困难版可以选6张道具卡</span>
+                            <span>困难版可以选7张道具卡</span>
                         </li>
                         <li class="flex items-start">
                             <i class="fa fa-check-circle text-accent mt-1 mr-2"></i>
@@ -304,12 +304,12 @@
                 <div class="grid grid-cols-2 gap-6">
                     <div class="mode-btn mode-active border-2 rounded-lg p-6 text-center text-white">
                         <h4 class="font-bold text-accent mb-3">普通版</h4>
-                        <p class="text-sm">可选择3张道具卡</p>
+                        <p class="text-sm">可选择4张道具卡</p>
                         <div class="mt-4 text-sm text-white/80">适合新手体验</div>
                     </div>
                     <div class="mode-btn border-2 border-transparent rounded-lg p-6 text-center text-white">
                         <h4 class="font-bold text-white mb-3">困难版</h4>
-                        <p class="text-sm">可选择6张道具卡</p>
+                        <p class="text-sm">可选择7张道具卡</p>
                         <div class="mt-4 text-sm text-white/80">挑战更多乐趣</div>
                     </div>
                 </div>
@@ -334,7 +334,7 @@
                     </button>
                 </div>
                 <div id="placed-items-count-prep" class="text-white py-2 px-3 bg-white/10 rounded-lg min-h-[40px]">
-                    已放置道具：0/3（普通版最多放置3个）
+                    已放置道具：0/4（普通版最多放置4个）
                 </div>
             </div>
             
@@ -444,8 +444,8 @@
                     </div>
                     
                     <div class="item-card p-3 bg-gray-50 rounded-lg">
-                        <h4 class="font-bold text-gray-600">我是压力怪</h4>
-                        <p class="text-sm text-gray-600">当局一名打手必须一直压力另一位打手</p>
+                        <h4 class="font-bold text-gray-600">一起去堵桥</h4>
+                        <p class="text-sm text-gray-600">卡战备进航天堵桥成功一次</p>
                     </div>
                     
                     <div class="item-card p-3 bg-yellow-50 rounded-lg">
@@ -469,8 +469,8 @@
                     </div>
                     
                     <div class="item-card p-3 bg-orange-50 rounded-lg">
-                        <h4 class="font-bold text-orange-600">我会说方言</h4>
-                        <p class="text-sm text-gray-600">双打手当局游戏必须用方言沟通</p>
+                        <h4 class="font-bold text-orange-600">房卡小能手</h4>
+                        <p class="text-sm text-gray-600">摸一张房卡</p>
                     </div>
                     
                     <div class="item-card p-3 bg-teal-50 rounded-lg">
@@ -520,11 +520,11 @@
             modes: {
                 normal: {
                     name: "普通版",
-                    maxItems: 3
+                    maxItems: 4  // 普通版可选择4个道具
                 },
                 hard: {
                     name: "困难版",
-                    maxItems: 6
+                    maxItems: 7  // 困难版可选择7个道具
                 }
             },
             // 道具列表
@@ -543,9 +543,9 @@
                 },
                 {
                     id: 3,
-                    name: "我是压力怪",
+                    name: "一起去堵桥",
                     icon: "💥",
-                    description: "当局一名打手必须一直压力另一位打手"
+                    description: "卡战备进航天堵桥成功一次"
                 },
                 {
                     id: 4,
@@ -573,9 +573,9 @@
                 },
                 {
                     id: 8,
-                    name: "我会说方言",
+                    name: "房卡小能手",
                     icon: "🗣️",
-                    description: "双打手当局游戏必须用方言沟通"
+                    description: "摸一张房卡"
                 },
                 {
                     id: 9,
@@ -979,7 +979,7 @@
             // 清除所有道具（道具放置阶段）
             clearAllItemsPrep.addEventListener('click', clearAllItems);
             
-            // 道具触发提示框 - 修改：点击继续不自动前进
+            // 道具触发提示框 - 点击继续不自动前进
             continueButton.addEventListener('click', () => {
                 itemTriggerModal.classList.add('hidden');
                 // 恢复按钮可点击状态
